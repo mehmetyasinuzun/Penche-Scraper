@@ -1,7 +1,7 @@
 /**
- * Element picker overlay injected into the page.
- * User hovers to highlight elements, clicks to select.
- * Generates a robust CSS selector and reports back to options page.
+ * Element picker overlay.
+ * Injected into the page; user hovers to highlight elements, clicks to select.
+ * Generates a stable CSS selector and reports it back to the options page.
  */
 
 export interface PickerResult {
@@ -9,22 +9,17 @@ export interface PickerResult {
   previewText: string;
 }
 
-let overlayEl: HTMLElement | null = null;
 let highlightEl: HTMLElement | null = null;
-let currentTarget: Element | null = null;
 let resolvePromise: ((r: PickerResult) => void) | null = null;
-let rejectPromise: ((r: void) => void) | null = null;
+let rejectPromise: (() => void) | null = null;
 
-/** Start the element picker. Returns a promise that resolves on selection. */
+/** Activate the element picker. Returns a promise that resolves on selection. */
 export function startPicker(): Promise<PickerResult> {
   cleanup();
-
   return new Promise<PickerResult>((resolve, reject) => {
     resolvePromise = resolve;
     rejectPromise = reject;
-
     createOverlay();
-
     document.addEventListener('mouseover', onMouseOver, true);
     document.addEventListener('click', onClick, true);
     document.addEventListener('keydown', onKeyDown, true);
@@ -33,32 +28,19 @@ export function startPicker(): Promise<PickerResult> {
 
 /** Programmatically cancel the picker. */
 export function cancelPicker(): void {
-  if (rejectPromise) rejectPromise();
+  rejectPromise?.();
   cleanup();
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 function createOverlay(): void {
-  overlayEl = document.createElement('div');
-  overlayEl.id = '__penche_picker_overlay__';
-  Object.assign(overlayEl.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '100vw',
-    height: '100vh',
-    zIndex: '2147483646',
-    cursor: 'crosshair',
-    pointerEvents: 'none',
-  });
-
   highlightEl = document.createElement('div');
-  highlightEl.id = '__penche_picker_highlight__';
+  highlightEl.id = '__penche_highlight__';
   Object.assign(highlightEl.style, {
     position: 'fixed',
     border: '2px solid #ff4444',
-    background: 'rgba(255,68,68,0.12)',
+    background: 'rgba(255,68,68,0.1)',
     borderRadius: '3px',
     pointerEvents: 'none',
     zIndex: '2147483647',
@@ -68,36 +50,33 @@ function createOverlay(): void {
   });
 
   const badge = document.createElement('div');
-  badge.id = '__penche_picker_badge__';
-  badge.textContent = 'Penche: Click to select | Esc to cancel';
+  badge.id = '__penche_badge__';
+  badge.textContent = 'Penche: öğeye tıkla · ESC iptal';
   Object.assign(badge.style, {
     position: 'fixed',
-    top: '10px',
+    top: '12px',
     left: '50%',
     transform: 'translateX(-50%)',
     background: '#1a1a2e',
     color: '#eee',
-    padding: '6px 14px',
-    borderRadius: '6px',
+    padding: '6px 16px',
+    borderRadius: '20px',
     fontSize: '13px',
     fontFamily: 'monospace',
     zIndex: '2147483647',
     pointerEvents: 'none',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+    whiteSpace: 'nowrap',
   });
 
-  document.body.appendChild(overlayEl);
   document.body.appendChild(highlightEl);
   document.body.appendChild(badge);
 }
 
 function onMouseOver(e: MouseEvent): void {
   const target = e.target as Element;
-  if (!target || isPickerElement(target)) return;
-
-  currentTarget = target;
+  if (!target || isPickerEl(target)) return;
   const rect = target.getBoundingClientRect();
-
   if (highlightEl) {
     Object.assign(highlightEl.style, {
       display: 'block',
@@ -113,23 +92,16 @@ function onClick(e: MouseEvent): void {
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
-
   const target = e.target as Element;
-  if (!target || isPickerElement(target)) return;
-
-  const selector = buildSelector(target);
-  const previewText = extractText(target);
-
-  if (resolvePromise) {
-    resolvePromise({ selector, previewText });
-  }
+  if (!target || isPickerEl(target)) return;
+  resolvePromise?.({ selector: buildSelector(target), previewText: extractText(target) });
   cleanup();
 }
 
 function onKeyDown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
     e.preventDefault();
-    if (rejectPromise) rejectPromise();
+    rejectPromise?.();
     cleanup();
   }
 }
@@ -138,102 +110,73 @@ function cleanup(): void {
   document.removeEventListener('mouseover', onMouseOver, true);
   document.removeEventListener('click', onClick, true);
   document.removeEventListener('keydown', onKeyDown, true);
-
-  ['__penche_picker_overlay__', '__penche_picker_highlight__', '__penche_picker_badge__'].forEach(
-    (id) => document.getElementById(id)?.remove()
-  );
-
-  overlayEl = null;
+  document.getElementById('__penche_highlight__')?.remove();
+  document.getElementById('__penche_badge__')?.remove();
   highlightEl = null;
-  currentTarget = null;
   resolvePromise = null;
   rejectPromise = null;
 }
 
-function isPickerElement(el: Element): boolean {
-  return (
-    el.id === '__penche_picker_overlay__' ||
-    el.id === '__penche_picker_highlight__' ||
-    el.id === '__penche_picker_badge__'
-  );
+function isPickerEl(el: Element): boolean {
+  return el.id === '__penche_highlight__' || el.id === '__penche_badge__';
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Selector generation — prefers stable class-based selectors.
-// ────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Selector generation
+// ─────────────────────────────────────────────────────────────────────────────
 
 function buildSelector(el: Element): string {
-  // Strategy 1: element has a useful id.
+  // 1. Stable ID
   if (el.id && isStableId(el.id)) {
-    const sel = `#${CSS.escape(el.id)}`;
-    if (isUnique(sel)) return sel;
+    const s = `#${CSS.escape(el.id)}`;
+    if (isUnique(s)) return s;
   }
-
-  // Strategy 2: tag + class combination.
-  const classSelector = buildClassSelector(el);
-  if (classSelector && isUnique(classSelector)) return classSelector;
-
-  // Strategy 3: structural path (limited depth).
-  return buildStructuralSelector(el, 4);
+  // 2. Tag + stable class combination
+  const cls = buildClassSelector(el);
+  if (cls && isUnique(cls)) return cls;
+  // 3. Structural path (max 4 levels)
+  return buildStructural(el, 4);
 }
 
 function buildClassSelector(el: Element): string | null {
   const tag = el.tagName.toLowerCase();
   const stable = Array.from(el.classList).filter(isStableClass);
-  if (stable.length === 0) return null;
+  if (!stable.length) return null;
   return `${tag}.${stable.map(CSS.escape).join('.')}`;
 }
 
-function buildStructuralSelector(el: Element, maxDepth: number): string {
+function buildStructural(el: Element, maxDepth: number): string {
   const parts: string[] = [];
-  let current: Element | null = el;
+  let cur: Element | null = el;
   let depth = 0;
-
-  while (current && current !== document.body && depth < maxDepth) {
-    const tag = current.tagName.toLowerCase();
-    const parent = current.parentElement;
-
+  while (cur && cur !== document.body && depth < maxDepth) {
+    const tag = cur.tagName.toLowerCase();
+    const parent = cur.parentElement;
     if (parent) {
-      const siblings = Array.from(parent.children).filter((c) => c.tagName === current!.tagName);
-      if (siblings.length > 1) {
-        const idx = siblings.indexOf(current) + 1;
-        parts.unshift(`${tag}:nth-of-type(${idx})`);
-      } else {
-        parts.unshift(tag);
-      }
+      const siblings = Array.from(parent.children).filter((c) => c.tagName === cur!.tagName);
+      parts.unshift(siblings.length > 1 ? `${tag}:nth-of-type(${siblings.indexOf(cur) + 1})` : tag);
     } else {
       parts.unshift(tag);
     }
-
-    current = current.parentElement;
+    cur = cur.parentElement;
     depth++;
   }
-
   return parts.join(' > ');
 }
 
-function isUnique(selector: string): boolean {
-  try {
-    return document.querySelectorAll(selector).length === 1;
-  } catch {
-    return false;
-  }
+function isUnique(sel: string): boolean {
+  try { return document.querySelectorAll(sel).length === 1; } catch { return false; }
 }
 
 function isStableId(id: string): boolean {
-  // Avoid auto-generated IDs that look random.
   return !/^\d|[a-f0-9]{8,}/.test(id);
 }
 
 function isStableClass(cls: string): boolean {
-  // Filter out utility classes with random hashes.
-  if (cls.length > 60) return false;
-  if (/[a-f0-9]{8,}/.test(cls)) return false;
-  // Keep semantic class names.
+  if (cls.length > 60 || /[a-f0-9]{8,}/.test(cls)) return false;
   return /^[a-z_-][a-z0-9_-]*$/i.test(cls);
 }
 
 function extractText(el: Element): string {
-  const text = (el as HTMLElement).innerText ?? el.textContent ?? '';
-  return text.trim().slice(0, 200);
+  return ((el as HTMLElement).innerText ?? el.textContent ?? '').trim().slice(0, 200);
 }
