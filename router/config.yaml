@@ -1,0 +1,54 @@
+# Penche Router — Example Configuration
+# Sensitive values should be set via environment variables, not committed.
+#
+# Environment variable overrides:
+#   PENCHE_AUTH_SECRET      → auth.shared_secret  (REQUIRED)
+#   PENCHE_TAIGA_TOKEN      → adapters.taiga.auth_token
+#   PENCHE_TAIGA_PROJECT_ID → adapters.taiga.project_id
+#   PENCHE_WEBHOOK_URL      → adapters.webhook.url
+#   PENCHE_SERVER_PORT      → server.port
+#   PENCHE_STORAGE_DSN      → storage.dsn
+
+server:
+  host: "127.0.0.1"
+  port: 8787
+
+auth:
+  # CHANGE THIS — or set PENCHE_AUTH_SECRET env var.
+  shared_secret: "CHANGE_ME"
+
+storage:
+  dsn: "penche.db"
+
+worker:
+  poll_interval_ms: 2000
+  max_retries: 5
+  base_backoff_ms: 1000
+  max_backoff_ms: 60000
+  concurrent_jobs: 3
+
+routes:
+  default: "taiga"
+  # domain_map:
+  #   "exploit.in": "taiga"
+  #   "breachforums.st": "webhook"
+
+adapters:
+  taiga:
+    enabled: true
+    base_url: "https://tree.taiga.io"
+    # auth_token: set via PENCHE_TAIGA_TOKEN
+    # project_id: set via PENCHE_TAIGA_PROJECT_ID
+    # status_id: 0  # 0 = use Taiga project default
+
+  webhook:
+    enabled: false
+    url: ""
+    method: "POST"
+    timeout_ms: 10000
+    # headers:
+    #   Authorization: "Bearer TOKEN"
+
+log:
+  level: "info"     # debug | info | warn | error
+  format: "json"    # json | text

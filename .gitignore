@@ -1,0 +1,26 @@
+# Go
+router/bin/
+router/*.db
+router/*.db-shm
+router/*.db-wal
+
+# Node / Extension build
+extension/node_modules/
+extension/dist/
+
+# Config with secrets — use config.yaml as template, never commit local
+router/config.local.yaml
+router/config.production.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log

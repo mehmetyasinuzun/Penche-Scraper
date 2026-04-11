@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Penche</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 300px;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f0f1a;
+      color: #e2e8f0;
+      font-size: 13px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px;
+      background: #1a1a2e;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .header h1 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #a78bfa;
+      letter-spacing: 0.5px;
+    }
+    .header .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #374151;
+      margin-left: auto;
+    }
+    .header .dot.online { background: #22c55e; }
+    .header .dot.offline { background: #ef4444; }
+
+    .section { padding: 12px 14px; border-bottom: 1px solid #1e1e38; }
+    .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .value { font-size: 13px; color: #cbd5e1; }
+    .value.ok { color: #22c55e; }
+    .value.warn { color: #f59e0b; }
+    .value.err { color: #ef4444; }
+
+    .btn {
+      display: block;
+      width: calc(100% - 28px);
+      margin: 12px 14px;
+      padding: 9px;
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #6d28d9; }
+    .btn:active { background: #5b21b6; }
+    .btn:disabled { background: #374151; cursor: not-allowed; }
+
+    .footer {
+      display: flex;
+      justify-content: flex-end;
+      padding: 8px 14px;
+    }
+    .footer a {
+      font-size: 11px;
+      color: #4b5563;
+      text-decoration: none;
+    }
+    .footer a:hover { color: #9ca3af; }
+    #status-msg {
+      padding: 0 14px 10px;
+      font-size: 12px;
+      min-height: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Penche</h1>
+    <span class="dot" id="router-dot" title="Router status"></span>
+  </div>
+
+  <div class="section">
+    <div class="label">Current Domain</div>
+    <div class="value" id="domain-val">—</div>
+  </div>
+
+  <div class="section">
+    <div class="label">Profile</div>
+    <div class="value" id="profile-val">—</div>
+  </div>
+
+  <div class="section">
+    <div class="label">Outbox (pending)</div>
+    <div class="value" id="outbox-val">0</div>
+  </div>
+
+  <div class="section">
+    <div class="label">Last Capture</div>
+    <div class="value" id="last-capture-val">—</div>
+  </div>
+
+  <button class="btn" id="capture-btn">Capture Now</button>
+  <div id="status-msg"></div>
+
+  <div class="footer">
+    <a href="#" id="options-link">Options</a>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

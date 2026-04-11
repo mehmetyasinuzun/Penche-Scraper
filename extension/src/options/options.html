@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Penche — Options</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f0f1a;
+      color: #e2e8f0;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 220px;
+      background: #1a1a2e;
+      border-right: 1px solid #2a2a4a;
+      padding: 20px 0;
+      flex-shrink: 0;
+    }
+    .sidebar h2 {
+      padding: 0 16px 14px;
+      font-size: 16px;
+      color: #a78bfa;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .sidebar nav a {
+      display: block;
+      padding: 9px 16px;
+      color: #9ca3af;
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: all 0.1s;
+    }
+    .sidebar nav a:hover { color: #e2e8f0; background: #1e1e38; }
+    .sidebar nav a.active { color: #a78bfa; border-left-color: #a78bfa; background: #1e1e38; }
+
+    .main { flex: 1; padding: 28px 32px; max-width: 760px; }
+    .section { display: none; }
+    .section.active { display: block; }
+    h3 { font-size: 18px; margin-bottom: 20px; color: #f1f5f9; }
+
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 12px; color: #9ca3af; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
+    input, select, textarea {
+      width: 100%;
+      background: #1a1a2e;
+      border: 1px solid #374151;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 13px;
+      outline: none;
+      transition: border 0.15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #7c3aed; }
+    textarea { font-family: monospace; resize: vertical; min-height: 80px; }
+
+    .btn {
+      padding: 8px 18px;
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #6d28d9; }
+    .btn.secondary { background: #1e293b; border: 1px solid #374151; }
+    .btn.secondary:hover { background: #334155; }
+    .btn.danger { background: #7f1d1d; }
+    .btn.danger:hover { background: #991b1b; }
+    .btn-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+    .domain-list { list-style: none; margin-bottom: 16px; }
+    .domain-list li {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      background: #1a1a2e;
+      border: 1px solid #2a2a4a;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      gap: 10px;
+    }
+    .domain-list .d-name { flex: 1; font-family: monospace; color: #a78bfa; }
+    .domain-list .d-mode { font-size: 12px; color: #6b7280; }
+    .domain-list .d-enabled { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+    .domain-list .d-enabled.off { background: #374151; }
+
+    .editor {
+      background: #1a1a2e;
+      border: 1px solid #2a2a4a;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    .editor h4 { font-size: 14px; color: #a78bfa; margin-bottom: 16px; }
+
+    .picker-row { display: flex; gap: 8px; align-items: flex-end; }
+    .picker-row .form-group { flex: 1; margin-bottom: 0; }
+
+    .preview-box {
+      background: #111827;
+      border: 1px solid #374151;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 12px;
+      color: #9ca3af;
+      font-family: monospace;
+      min-height: 40px;
+      margin-top: 8px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .status-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #1a1a2e;
+      border-top: 1px solid #2a2a4a;
+      padding: 8px 24px;
+      font-size: 12px;
+      color: #6b7280;
+      display: flex;
+      gap: 16px;
+    }
+    .status-bar .msg { color: #22c55e; }
+    .status-bar .err { color: #ef4444; }
+
+    select[multiple] { height: auto; min-height: 80px; }
+    .hint { font-size: 11px; color: #4b5563; margin-top: 4px; }
+
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #2a2a4a; margin-bottom: 20px; }
+    .tab-btn {
+      padding: 8px 16px;
+      background: none;
+      border: none;
+      color: #6b7280;
+      font-size: 13px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .tab-btn.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <h2>⚡ Penche</h2>
+    <nav>
+      <a href="#" class="active" data-section="global">Global Settings</a>
+      <a href="#" data-section="domains">Domain Profiles</a>
+      <a href="#" data-section="backup">Export / Import</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <!-- Global Settings -->
+    <section class="section active" id="sec-global">
+      <h3>Global Settings</h3>
+
+      <div class="form-group">
+        <label>Router Base URL</label>
+        <input type="text" id="router-url" placeholder="http://127.0.0.1:8787" />
+      </div>
+      <div class="form-group">
+        <label>Shared Secret</label>
+        <input type="password" id="router-secret" placeholder="CHANGE_ME" />
+        <div class="hint">Must match PENCHE_AUTH_SECRET on the router.</div>
+      </div>
+      <div class="form-group">
+        <label>Router Timeout (ms)</label>
+        <input type="number" id="router-timeout" min="1000" max="30000" step="500" />
+      </div>
+
+      <hr style="border-color:#2a2a4a; margin: 20px 0;" />
+
+      <div class="form-group">
+        <label>Default Screenshot Mode</label>
+        <select id="screenshot-mode">
+          <option value="viewport">viewport — single frame (fastest)</option>
+          <option value="full_page">full_page — scroll &amp; stitch</option>
+          <option value="top_px" selected>top_px — from top, N pixels</option>
+          <option value="element">element — crop to selector</option>
+        </select>
+      </div>
+      <div class="form-group" id="row-top-px">
+        <label>Top Px (for top_px mode)</label>
+        <input type="number" id="screenshot-toppx" min="400" max="20000" step="100" />
+      </div>
+      <div class="form-group">
+        <label>Max Full Page Height (px)</label>
+        <input type="number" id="screenshot-maxh" min="2000" max="32000" step="500" />
+      </div>
+      <div class="form-group">
+        <label>Image Format</label>
+        <select id="screenshot-format">
+          <option value="jpeg">JPEG (smaller)</option>
+          <option value="png">PNG (lossless)</option>
+          <option value="webp">WebP</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>JPEG Quality (0.1 – 1.0)</label>
+        <input type="number" id="screenshot-quality" min="0.1" max="1.0" step="0.05" />
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="save-global-btn">Save Global Settings</button>
+        <button class="btn secondary" id="test-router-btn">Test Router Connection</button>
+      </div>
+    </section>
+
+    <!-- Domain Profiles -->
+    <section class="section" id="sec-domains">
+      <h3>Domain Profiles</h3>
+      <ul class="domain-list" id="domain-list"></ul>
+      <button class="btn secondary" id="add-domain-btn">+ Add Domain Profile</button>
+
+      <div class="editor" id="domain-editor" style="display:none;">
+        <h4 id="editor-title">New Domain Profile</h4>
+
+        <div class="form-group">
+          <label>Domain Host</label>
+          <input type="text" id="d-host" placeholder="xss.is" />
+          <div class="hint">Use *.domain.com for wildcard subdomains.</div>
+        </div>
+        <div class="form-group">
+          <label>Path Regex (optional)</label>
+          <input type="text" id="d-path-regex" placeholder="/threads?/.*" />
+        </div>
+
+        <div class="form-group">
+          <label>Enabled</label>
+          <select id="d-enabled">
+            <option value="true">Yes</option>
+            <option value="false">No (disabled)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Tags (comma separated)</label>
+          <input type="text" id="d-tags" placeholder="cti, forum, xss" />
+        </div>
+
+        <hr style="border-color:#2a2a4a; margin: 16px 0;" />
+        <h4 style="color:#9ca3af; margin-bottom:14px;">Title Selector</h4>
+
+        <div class="picker-row">
+          <div class="form-group">
+            <label>Primary CSS Selector</label>
+            <input type="text" id="d-title-primary" placeholder="h1.p-title-value" />
+          </div>
+          <button class="btn secondary" id="pick-title-btn" title="Pick element visually">🎯 Pick</button>
+        </div>
+        <div class="preview-box" id="title-preview">No preview yet</div>
+
+        <div class="form-group" style="margin-top:12px;">
+          <label>Fallback Selectors (one per line)</label>
+          <textarea id="d-title-fallbacks" placeholder="h1&#10;meta[property='og:title']"></textarea>
+        </div>
+
+        <hr style="border-color:#2a2a4a; margin: 16px 0;" />
+        <h4 style="color:#9ca3af; margin-bottom:14px;">Screenshot Override</h4>
+
+        <div class="form-group">
+          <label>Screenshot Mode</label>
+          <select id="d-ss-mode">
+            <option value="">Use global default</option>
+            <option value="viewport">viewport</option>
+            <option value="full_page">full_page</option>
+            <option value="top_px">top_px</option>
+            <option value="element">element</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Top Px (override)</label>
+          <input type="number" id="d-ss-toppx" min="400" max="20000" step="100" placeholder="leave empty for global" />
+        </div>
+
+        <div class="btn-row">
+          <button class="btn" id="save-domain-btn">Save Profile</button>
+          <button class="btn secondary" id="test-domain-btn">Test Title Extraction</button>
+          <button class="btn danger" id="delete-domain-btn">Delete</button>
+          <button class="btn secondary" id="cancel-domain-btn">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Export / Import -->
+    <section class="section" id="sec-backup">
+      <h3>Export / Import</h3>
+      <div class="form-group">
+        <label>Configuration JSON</label>
+        <textarea id="config-json" style="min-height:300px; font-size:12px;"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="export-btn">Export Config</button>
+        <button class="btn secondary" id="import-btn">Import Config</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="status-bar">
+  <span>Penche Options</span>
+  <span id="status-msg" class="msg"></span>
+</div>
+
+<script src="options.js" type="module"></script>
+</body>
+</html>
