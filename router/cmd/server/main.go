@@ -98,6 +98,13 @@ func buildAdapters(cfg *config.Config, log *slog.Logger) map[string]adapters.Des
 			log.Error("taiga adapter config invalid", "error", err)
 			os.Exit(1)
 		}
+		// Resolve numeric project ID from slug at startup so it fails fast.
+		startupCtx, startupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer startupCancel()
+		if err := ta.ResolveProjectID(startupCtx); err != nil {
+			log.Error("taiga: could not resolve project", "error", err)
+			os.Exit(1)
+		}
 		m[ta.Name()] = ta
 		log.Info("adapter registered", "name", ta.Name())
 	}

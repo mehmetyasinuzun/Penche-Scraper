@@ -18,19 +18,19 @@ import (
 
 const adapterName = "taiga"
 
-// Adapter sends events to Taiga as user stories / tasks with screenshot attachments.
+// Adapter sends events to Taiga as issues with screenshot attachments.
 type Adapter struct {
-	cfg    config.TaigaConfig
-	client *http.Client
+	cfg       config.TaigaConfig
+	client    *http.Client
+	projectID int // resolved at startup from slug if needed
 }
 
 // New creates a Taiga adapter. Call ValidateConfig() before use.
 func New(cfg config.TaigaConfig) *Adapter {
 	return &Adapter{
-		cfg: cfg,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		cfg:       cfg,
+		projectID: cfg.ProjectID,
+		client:    &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -43,20 +43,71 @@ func (a *Adapter) ValidateConfig() error {
 	if a.cfg.AuthToken == "" {
 		return fmt.Errorf("taiga: auth_token is required (set PENCHE_TAIGA_TOKEN)")
 	}
-	if a.cfg.ProjectID == 0 {
-		return fmt.Errorf("taiga: project_id is required")
+	if a.cfg.ProjectSlug == "" && a.cfg.ProjectID == 0 {
+		return fmt.Errorf("taiga: project_slug or project_id is required (set project_slug to the part after /project/ in your Taiga URL)")
 	}
 	return nil
 }
 
+// ResolveProjectID fetches the numeric project ID from Taiga if only a slug was given.
+// Call this once after ValidateConfig, before serving requests.
+func (a *Adapter) ResolveProjectID(ctx context.Context) error {
+	if a.projectID != 0 {
+		return nil // already have it
+	}
+	if a.cfg.ProjectSlug == "" {
+		return fmt.Errorf("taiga: no project_slug to resolve")
+	}
+
+	url := fmt.Sprintf("%s/api/v1/projects/by_slug?slug=%s",
+		strings.TrimRight(a.cfg.BaseURL, "/"), a.cfg.ProjectSlug)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+a.cfg.AuthToken)
+
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("taiga: lookup project by slug: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return fmt.Errorf("taiga: project slug %q not found — check your project_slug in config", a.cfg.ProjectSlug)
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("taiga: project lookup returned %d", resp.StatusCode)
+	}
+
+	var result struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("taiga: parse project response: %w", err)
+	}
+	if result.ID == 0 {
+		return fmt.Errorf("taiga: got project ID=0 from slug %q", a.cfg.ProjectSlug)
+	}
+
+	a.projectID = result.ID
+	return nil
+}
+
 func (a *Adapter) Send(ctx context.Context, evt *domain.StoredEvent) (adapters.DeliveryResult, error) {
+	if a.projectID == 0 {
+		if err := a.ResolveProjectID(ctx); err != nil {
+			return adapters.DeliveryResult{}, err
+		}
+	}
+
 	issueRef, err := a.createIssue(ctx, evt)
 	if err != nil {
 		return adapters.DeliveryResult{}, fmt.Errorf("taiga create issue: %w", err)
 	}
 
 	if err := a.attachScreenshot(ctx, issueRef, evt); err != nil {
-		// Attachment failure is non-fatal but we log it; the issue was created.
 		return adapters.DeliveryResult{
 			ExternalID: issueRef,
 			Message:    fmt.Sprintf("issue created but screenshot attachment failed: %v", err),
@@ -69,7 +120,6 @@ func (a *Adapter) Send(ctx context.Context, evt *domain.StoredEvent) (adapters.D
 	}, nil
 }
 
-// issueCreateRequest is the Taiga REST API payload for creating an issue.
 type issueCreateRequest struct {
 	Project     int      `json:"project"`
 	Subject     string   `json:"subject"`
@@ -93,7 +143,7 @@ func (a *Adapter) createIssue(ctx context.Context, evt *domain.StoredEvent) (str
 	}
 
 	req := issueCreateRequest{
-		Project:     a.cfg.ProjectID,
+		Project:     a.projectID,
 		Subject:     truncate(evt.PageTitle, 200),
 		Description: description,
 		Tags:        tags,
@@ -122,13 +172,11 @@ func (a *Adapter) createIssue(ctx context.Context, evt *domain.StoredEvent) (str
 	}
 
 	var result struct {
-		Ref int    `json:"ref"`
-		ID  int    `json:"id"`
+		Ref int `json:"ref"`
 	}
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return "", fmt.Errorf("parse response: %w", err)
 	}
-
 	return fmt.Sprintf("%d", result.Ref), nil
 }
 
@@ -137,20 +185,17 @@ func (a *Adapter) attachScreenshot(ctx context.Context, issueRef string, evt *do
 		return nil
 	}
 
-	ext := mimeToExt(evt.ScreenshotMIME)
-	filename := fmt.Sprintf("capture_%s%s", evt.EventID[:8], ext)
-
-	var body bytes.Buffer
-	mw := multipart.NewWriter(&body)
-
-	// Taiga attachment endpoint requires project and object_id.
-	// We need to first fetch the issue ID by ref.
 	issueID, err := a.getIssueIDByRef(ctx, issueRef)
 	if err != nil {
 		return fmt.Errorf("lookup issue id: %w", err)
 	}
 
-	_ = writeField(mw, "project", fmt.Sprintf("%d", a.cfg.ProjectID))
+	ext := mimeToExt(evt.ScreenshotMIME)
+	filename := fmt.Sprintf("capture_%s%s", evt.EventID[:8], ext)
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	_ = writeField(mw, "project", fmt.Sprintf("%d", a.projectID))
 	_ = writeField(mw, "object_id", fmt.Sprintf("%d", issueID))
 
 	part, err := mw.CreateFormFile("attached_file", filename)
@@ -163,8 +208,7 @@ func (a *Adapter) attachScreenshot(ctx context.Context, issueRef string, evt *do
 	mw.Close()
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		strings.TrimRight(a.cfg.BaseURL, "/")+"/api/v1/issues/attachments",
-		&body)
+		strings.TrimRight(a.cfg.BaseURL, "/")+"/api/v1/issues/attachments", &body)
 	if err != nil {
 		return err
 	}
@@ -186,14 +230,14 @@ func (a *Adapter) attachScreenshot(ctx context.Context, issueRef string, evt *do
 
 func (a *Adapter) getIssueIDByRef(ctx context.Context, ref string) (int, error) {
 	url := fmt.Sprintf("%s/api/v1/issues?project=%d&ref=%s",
-		strings.TrimRight(a.cfg.BaseURL, "/"), a.cfg.ProjectID, ref)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		strings.TrimRight(a.cfg.BaseURL, "/"), a.projectID, ref)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return 0, err
 	}
-	a.setHeaders(httpReq)
+	a.setHeaders(req)
 
-	resp, err := a.client.Do(httpReq)
+	resp, err := a.client.Do(req)
 	if err != nil {
 		return 0, err
 	}

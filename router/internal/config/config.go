@@ -56,9 +56,14 @@ type TaigaConfig struct {
 	Enabled   bool   `yaml:"enabled"`
 	BaseURL   string `yaml:"base_url"`
 	AuthToken string `yaml:"auth_token"`
-	ProjectID int    `yaml:"project_id"`
-	// Status ID to assign new tasks (optional, uses project default if 0)
-	StatusID  int    `yaml:"status_id"`
+	// ProjectSlug is the part after /project/ in the Taiga URL.
+	// Example: tree.taiga.io/project/enesm-monitoring-team → "enesm-monitoring-team"
+	// Preferred over ProjectID — slug is visible in the browser URL.
+	ProjectSlug string `yaml:"project_slug"`
+	// ProjectID (numeric) is resolved automatically from ProjectSlug if not set.
+	ProjectID int `yaml:"project_id"`
+	// StatusID is optional — uses the project's default status if 0.
+	StatusID int `yaml:"status_id"`
 }
 
 type WebhookConfig struct {

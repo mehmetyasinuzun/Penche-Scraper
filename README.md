@@ -1,195 +1,227 @@
 # Penche
 
-Pençe. Bir forum sayfasındayken tek tuşa basıyorsun, başlık + link + ekran görüntüsü doğrudan Taiga kartına düşüyor. O kadar.
+Forum takibi yapıyorsun, tehdit içeren bir başlık görüyorsun, `Ctrl+Shift+X`'e basıyorsun — başlık, URL ve ekran görüntüsü Taiga Kanban'ına kart olarak düşüyor. Bu kadar.
 
-CTI süreçlerinde en çok zamanı yiyen şeylerden biri forum takibi — giriyorsun, görüyorsun, ekran görüntüsü alıyorsun, kopyala yapıştır yapıyorsun, ticket açıyorsun. Penche bu adımların hepsini bir klavye kısayoluna indirgiyor.
+Clear web forumlarında ve Tor Browser üzerinden `.onion` sitelerde çalışır. Bot koruması eklentiyi görmez — sen zaten tarayıcıdasın, eklenti sadece senin yaptığın şeyi kayıt altına alıyor.
 
 ---
 
 ## Nasıl Çalışır
 
-Tarayıcıya bir eklenti yüklenliyor. Sen forumda geziniyorsun, ilgili bir başlık gördüğünde `Ctrl+Shift+X`'e basıyorsun. Eklenti sayfanın başlığını, URL'ini ve ekran görüntüsünü alıp yerelde çalışan bir Go servisine gönderiyor. O servis de Taiga'da ilgili projeye otomatik kart açıyor, ekran görüntüsünü de karta attach ediyor.
-
 ```
 Sen (forum sayfası) → Ctrl+Shift+X
-  → Extension (başlık + URL + screenshot)
-    → Lokal Go Router (127.0.0.1:8787)
-      → Taiga API (issue + attachment)
+  → Eklenti → başlık + URL + screenshot
+    → Lokal Go servisi (127.0.0.1:8787)
+      → Taiga API → kart + ekran görüntüsü
 ```
 
-Taiga tokenın hiç tarayıcıya gelmiyor. Eklenti sadece localhost'taki servise konuşuyor. Servis de senin makinende, sadece 127.0.0.1'i dinliyor.
+Taiga token'ın hiç tarayıcıya gelmiyor. Eklenti sadece kendi makinendeki servise bağlanıyor, o servis Taiga'ya gidiyor.
 
-Clear web forumlarında çalışıyor, Tor Browser üzerinden .onion sitelerde de — eklenti DOM üzerinde çalıştığı için Cloudflare veya benzeri bir bot koruması eklentiyi görmüyor.
+---
+
+## Gereksinimler
+
+İki program yüklü olması lazım:
+
+**Node.js** — eklentiyi derlemek için  
+→ https://nodejs.org adresine gir, "LTS" yazan yeşil butona tıkla, indir ve kur.
+
+**Go** — lokal servisi çalıştırmak için  
+→ https://go.dev/dl adresine gir, Windows için `.msi` dosyasını indir, kur.
+
+Kurulumdan sonra yeni bir terminal aç ve şunları yaz:
+```
+node --version
+go version
+```
+İkisi de çıktı veriyorsa hazırsın.
 
 ---
 
 ## Kurulum
 
-### Router (Go servisi)
+### Adım 1 — Eklentiyi Derle
 
-Go 1.23 gerekiyor.
+Terminalden `extension` klasörüne gir:
 
-```bash
-cd router
-cp config.yaml config.local.yaml
+```
+cd "C:\Users\Yasin\Downloads\Penche Scraper\penche-scraper\extension"
+npm install
+npm run build:chrome
 ```
 
-`config.local.yaml` dosyasını aç, `shared_secret` kısmına güçlü bir şey yaz. Taiga ayarlarını ya bu dosyaya yaz ya da env var olarak geç:
+Bu işlem `dist/chrome` klasörünü oluşturur. Yaklaşık 10-30 saniye sürer.
 
-```bash
-export PENCHE_AUTH_SECRET="buraya-guclu-bir-sifre"
-export PENCHE_TAIGA_TOKEN="taiga-api-tokenin"
-export PENCHE_TAIGA_PROJECT_ID="proje-id-numarasi"
+### Adım 2 — Eklentiyi Tarayıcıya Yükle
 
-go run ./cmd/server -config config.local.yaml
+**Chrome:**
+1. Adres çubuğuna `chrome://extensions` yaz, Enter'a bas
+2. Sağ üstte **Geliştirici modu** toggle'ını aç (sağa kaydır)
+3. Solda çıkan **Paketlenmemiş öğe yükle** butonuna tıkla
+4. Şu klasörü seç: `penche-scraper\extension\dist\chrome`
+5. "Penche Scraper" listede görünmeli
+
+**Edge:**
+1. Adres çubuğuna `edge://extensions` yaz
+2. Sol altta **Geliştirici modu**nu aç
+3. **Paketlenmemiş öğe yükle** → aynı `dist\chrome` klasörünü seç
+
+---
+
+### Adım 3 — Taiga Bilgilerini Al
+
+İki şey lazım: API token ve proje slug.
+
+**API Token:**
+
+1. [tree.taiga.io](https://tree.taiga.io) adresinde oturum aç
+2. Sağ üstte kullanıcı adına tıkla → **User settings**
+3. Sol menüden **API** sekmesine tıkla
+4. Token görünüyorsa kopyala. Görünmüyorsa sayfada "Generate new token" benzeri bir buton vardır, ona tıkla.
+
+Token şuna benzer bir şey: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+**Proje Slug:**
+
+Taiga'da projenin URL'ine bak. Örneğin:
+```
+https://tree.taiga.io/project/enesm-monitoring-team/kanban
+```
+Buradaki `enesm-monitoring-team` senin proje slug'ın. Bunu bir yere not al.
+
+---
+
+### Adım 4 — Router'ı Ayarla
+
+`penche-scraper\router\config.yaml` dosyasını bir metin editörüyle aç (Notepad da olur).
+
+Şu üç satırı doldur:
+
+```yaml
+auth:
+  shared_secret: "istedigin-bir-sifre-yaz"   # herhangi bir şey, boş bırakma
+
+adapters:
+  taiga:
+    enabled: true
+    base_url: "https://tree.taiga.io"
+    project_slug: "enesm-monitoring-team"     # az önce URL'den aldığın kısım
+    auth_token: ""                             # buraya token'ı yapıştır
 ```
 
-Çalışıyor mu kontrol et:
-```bash
+`auth_token`'ı direkt dosyaya yazmak yerine env variable ile geçmek daha temiz — ama ikisi de çalışır.
+
+---
+
+### Adım 5 — Router'ı Başlat
+
+Terminalde `router` klasörüne gir ve şu komutu çalıştır:
+
+```
+cd "C:\Users\Yasin\Downloads\Penche Scraper\penche-scraper\router"
+go run ./cmd/server -config config.yaml
+```
+
+İlk çalıştırmada Go gerekli paketleri indirir, birkaç dakika sürebilir. Sonra şuna benzer bir çıktı görürsün:
+
+```json
+{"level":"INFO","msg":"adapter registered","name":"taiga"}
+{"level":"INFO","msg":"server starting","addr":"127.0.0.1:8787"}
+```
+
+Servis çalıştığı sürece bu terminal açık kalmalı.
+
+Çalışıp çalışmadığını test etmek için yeni bir terminalde:
+```
 curl http://127.0.0.1:8787/v1/health
 ```
-
-### Eklenti
-
-Node.js 20+ gerekiyor.
-
-```bash
-cd extension
-npm install
-npm run build
-```
-
-Bu komut `dist/chrome/` ve `dist/firefox/` klasörlerini oluşturuyor.
-
-**Chrome / Brave / Chromium:**
-- `chrome://extensions` aç
-- "Geliştirici modu"nu aç
-- "Paketlenmemiş öğe yükle" → `extension/dist/chrome/` klasörünü seç
-
-**Firefox / Tor Browser:**
-- `about:debugging#/runtime/this-firefox` aç
-- "Geçici Eklenti Yükle" → `extension/dist/firefox/manifest.json` dosyasını seç
-
-### Eklenti Ayarları
-
-Eklenti ikonuna tıkla → Options:
-- Router URL: `http://127.0.0.1:8787`
-- Shared Secret: router'da ne yazdıysan aynısı
-- "Test Router Connection" ile bağlantıyı doğrula
+`{"status":"ok"}` dönerse hazır.
 
 ---
 
-## Alan Adı Profili Tanımlama
+### Adım 6 — Eklentiyi Bağla
 
-Her forum sitesi için bir kez yapılıyor, sonra o sitede her kullanımda otomatik çalışıyor.
+1. Tarayıcıda Penche ikonuna tıkla → **Options**
+2. **Router URL**: `http://127.0.0.1:8787`
+3. **Shared Secret**: `config.yaml`'a ne yazdıysan aynısı
+4. **Save Global Settings**
+5. **Test Router Connection** → "Router is online" yazmalı
 
-1. Takip etmek istediğin foruma git (örn. `xss.is/threads/12345`)
-2. Options → Domain Profiles → Add
-3. Domain host yaz: `xss.is`
-4. "🎯 Pick" butonuna bas — sayfa üstünde bir seçici açılıyor
-5. Thread başlığının üstüne gel, kırmızı highlight'ı gördüğünde tıkla
+---
+
+### Adım 7 — Forum Profili Tanımla
+
+Her forum sitesi için bir kez yapılır, sonrası otomatik.
+
+1. Takip edeceğin foruma git (örn. xss.is'te bir thread aç)
+2. Options → **Domain Profiles** → **Add**
+3. **Domain host**: `xss.is`
+4. **🎯 Pick** butonuna bas
+5. Sayfa üstünde kırmızı highlight açılır — thread başlığına gel, tıkla
 6. Selector otomatik doluyor, preview gösteriyor
-7. Screenshot modunu ayarla (genelde `top_px` ile 2200-3000px yeterli)
-8. Kaydet
-
-Artık o sitede `Ctrl+Shift+X`'e basınca her şey otomatik.
-
-### Screenshot Modları
-
-| Mod | Ne Yapar |
-|---|---|
-| `viewport` | Sadece ekranda görünen alan. En hızlı. |
-| `top_px` | Sayfanın en üstünden N piksel. Varsayılan 2200px, ayarlanabilir. |
-| `full_page` | Tüm sayfayı scroll ederek parçalara böler, birleştirir. Max 16000px. |
-| `element` | Belirli bir CSS selector'ün bounding box'ını crop eder. |
-
-Her domain için ayrı mod tanımlayabilirsin, yoksa global default kullanılır.
+7. **Save Profile**
 
 ---
 
-## Router Kapalıyken
+## Kullanım
 
-Eklenti tarafa da bir outbox var. Router'a ulaşamazsa payload `browser.storage.local`'a yazılıyor, 30 saniyede bir tekrar deneniyor. Router ayağa kalkınca kuyruk boşalıyor.
+Forum sayfasındayken **`Ctrl+Shift+X`** — bitti.
 
----
-
-## Taiga Token Almak
-
-1. [tree.taiga.io](https://tree.taiga.io) → User Settings → API
-2. Application token'ı kopyala
-
-Proje ID için:
-```bash
-curl -H "Authorization: Bearer TOKEN" \
-  "https://tree.taiga.io/api/v1/projects/by_slug?slug=KULLANICI-PROJE_SLUG"
-```
-`id` alanındaki sayı proje ID'si.
+Sağ altta yeşil tik ve "Captured and sent!" yazısı çıkarsa Taiga'da kart açılmıştır.
 
 ---
 
-## Yeni Hedef Eklemek (Taiga Dışı)
+## Webhook Alternatifi
 
-Bir `DestinationAdapter` interface'i var:
+Taiga yerine Discord, Slack veya başka bir servise göndermek istersen:
 
-```go
-type DestinationAdapter interface {
-    Name() string
-    Send(ctx context.Context, evt *domain.StoredEvent) (DeliveryResult, error)
-    ValidateConfig() error
-}
+`config.yaml`'da:
+```yaml
+routes:
+  default: "webhook"
+
+adapters:
+  taiga:
+    enabled: false
+  webhook:
+    enabled: true
+    url: "https://discord.com/api/webhooks/..."   # webhook URL'ini buraya yapıştır
 ```
 
-`router/internal/adapters/` altına yeni bir klasör açıp bu interface'i implement edersen, `cmd/server/main.go`'ya kaydetmek yeterli. Eklentiye dokunman gerekmiyor.
-
-Halihazırda iki adapter var: `taiga` ve `webhook` (generic HTTP POST). Domain bazında farklı hedeflere yönlendirme de config üzerinden yapılabiliyor.
+Discord webhook URL'i almak için: Discord sunucunda → Ayarlar → Entegrasyonlar → Webhook oluştur → URL'yi kopyala. Başka bir şey gerekmez.
 
 ---
 
-## Güvenlik
+## Sonraki Forumu Eklemek
 
-- Taiga token eklentide tutulmuyor, sadece router config'inde
-- Router sadece `127.0.0.1` dinliyor, dışarıya açık değil
-- Her istek HMAC-SHA256 ile imzalanıyor, 5 dakika replay koruması var
-- Log'larda screenshot base64 verisi hiç yazılmıyor
+Her yeni forum için Adım 7'yi tekrar yap — sadece o domain için. Daha önce tanımladıkların aynen çalışmaya devam eder.
 
 ---
 
-## Geliştirme
+## Bir Şeyler Değiştirdikten Sonra
 
-```bash
-make test          # Go testleri çalıştır
-make ext-dev       # Extension'ı Chrome için watch modunda build et
-make build         # Her şeyi derle (router binary + her iki ext hedefi)
-make help          # Tüm komutlar
+Eklenti kodunu değiştirdiysen yeniden derle:
 ```
+cd extension
+npm run build:chrome
+```
+Sonra `chrome://extensions`'da Penche kartındaki **⟳ yenile** ikonuna bas. Router'da değişiklik yaptıysan terminali kapatıp `go run` komutunu tekrar çalıştırman yeterli.
 
 ---
 
-## Klasör Yapısı
+## Sık Karşılaşılan Durumlar
 
-```
-penche-scraper/
-  extension/
-    src/
-      background/    servis worker, capture, screenshot, outbox
-      content/       toast bildirimleri, element picker
-      popup/         hızlı durum ekranı
-      options/       ayarlar + profil editörü
-      shared/        ortak tipler, config, hmac, logger
-    manifest.chrome.json
-    manifest.firefox.json
-  router/
-    cmd/server/      uygulama entry point
-    internal/
-      api/           HTTP handler'lar
-      auth/          HMAC doğrulama
-      config/        YAML config + env override
-      domain/        core tipler
-      storage/       SQLite + migration'lar
-      adapters/      taiga, webhook
-      worker/        retry + dead-letter queue
-    config.yaml      örnek config
-  docs/
-    api.md           Router REST API referansı
-    architecture.md  detaylı mimari açıklama
-```
+**"Router offline" yazıyor:**  
+`go run` çalışmıyor demektir. Router terminaline bak, hata mesajı var mı kontrol et.
+
+**Token hatası alıyorum:**  
+`config.yaml`'daki `auth_token` ile Taiga'dan aldığın token aynı mı kontrol et. Token'da başta/sonda boşluk olmadığından emin ol.
+
+**Proje bulunamadı hatası:**  
+`project_slug` alanına Taiga URL'inden gördüğün kısmı aynen yazdığından emin ol. Büyük/küçük harf farklılığı olursa çalışmaz.
+
+**Kart açıldı ama ekran görüntüsü yok:**  
+Attachment ayrı bir API çağrısı — Taiga'nın rate limitine takılmış olabilir. Bir sonraki denemede gelecektir (router otomatik yeniden dener).
+
+**Profil tanımlamadan önce kısayola bastım:**  
+"No profile for this domain" uyarısı çıkar. Options'a gidip o domain için profil oluşturman yeterli.

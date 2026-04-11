@@ -1,20 +1,27 @@
-# Penche Router — Example Configuration
-# Sensitive values should be set via environment variables, not committed.
+# Penche Router — Konfigürasyon
 #
-# Environment variable overrides:
-#   PENCHE_AUTH_SECRET      → auth.shared_secret  (REQUIRED)
-#   PENCHE_TAIGA_TOKEN      → adapters.taiga.auth_token
-#   PENCHE_TAIGA_PROJECT_ID → adapters.taiga.project_id
-#   PENCHE_WEBHOOK_URL      → adapters.webhook.url
-#   PENCHE_SERVER_PORT      → server.port
-#   PENCHE_STORAGE_DSN      → storage.dsn
+# Bu dosyayı doğrudan düzenleyebilirsin.
+# Hassas bilgileri (token gibi) env variable olarak da geçebilirsin:
+#
+#   Windows CMD:
+#     set PENCHE_AUTH_SECRET=buraya-yaz
+#     set PENCHE_TAIGA_TOKEN=buraya-yaz
+#
+#   Windows PowerShell:
+#     $env:PENCHE_AUTH_SECRET="buraya-yaz"
+#     $env:PENCHE_TAIGA_TOKEN="buraya-yaz"
+#
+#   Linux / macOS / Git Bash:
+#     export PENCHE_AUTH_SECRET="buraya-yaz"
+#     export PENCHE_TAIGA_TOKEN="buraya-yaz"
 
 server:
   host: "127.0.0.1"
   port: 8787
 
 auth:
-  # CHANGE THIS — or set PENCHE_AUTH_SECRET env var.
+  # Eklenti ile router arasında ortak şifre.
+  # İstediğin bir şey olabilir — ama boş bırakma.
   shared_secret: "CHANGE_ME"
 
 storage:
@@ -29,26 +36,33 @@ worker:
 
 routes:
   default: "taiga"
+  # Belirli domainleri farklı adaptöre yönlendirmek istersen:
   # domain_map:
   #   "exploit.in": "taiga"
-  #   "breachforums.st": "webhook"
+  #   "baska-forum.onion": "webhook"
 
 adapters:
   taiga:
     enabled: true
     base_url: "https://tree.taiga.io"
-    # auth_token: set via PENCHE_TAIGA_TOKEN
-    # project_id: set via PENCHE_TAIGA_PROJECT_ID
-    # status_id: 0  # 0 = use Taiga project default
+    # project_slug: Taiga URL'indeki proje adı.
+    # Örnek: tree.taiga.io/project/enesm-monitoring-team/kanban
+    #   → project_slug: "enesm-monitoring-team"
+    project_slug: ""
+    # auth_token: Taiga API token'ı.
+    # env variable ile vermek daha güvenli: PENCHE_TAIGA_TOKEN
+    auth_token: ""
 
   webhook:
     enabled: false
+    # Herhangi bir HTTP endpoint — Discord, Slack, n8n, özel sunucu...
     url: ""
     method: "POST"
     timeout_ms: 10000
+    # Ek header gerektiren servisler için:
     # headers:
     #   Authorization: "Bearer TOKEN"
 
 log:
-  level: "info"     # debug | info | warn | error
-  format: "json"    # json | text
+  level: "info"
+  format: "json"
