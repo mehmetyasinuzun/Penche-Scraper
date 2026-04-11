@@ -50,6 +50,7 @@ type RoutesConfig struct {
 type AdaptersConfig struct {
 	Taiga   TaigaConfig   `yaml:"taiga"`
 	Webhook WebhookConfig `yaml:"webhook"`
+	Local   LocalConfig   `yaml:"local"`
 }
 
 type TaigaConfig struct {
@@ -67,11 +68,17 @@ type TaigaConfig struct {
 }
 
 type WebhookConfig struct {
-	Enabled  bool              `yaml:"enabled"`
-	URL      string            `yaml:"url"`
-	Method   string            `yaml:"method"`
-	Headers  map[string]string `yaml:"headers"`
-	TimeoutMs int              `yaml:"timeout_ms"`
+	Enabled   bool              `yaml:"enabled"`
+	URL       string            `yaml:"url"`
+	Method    string            `yaml:"method"`
+	Headers   map[string]string `yaml:"headers"`
+	TimeoutMs int               `yaml:"timeout_ms"`
+}
+
+// LocalConfig saves captures directly to a folder on disk.
+type LocalConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	OutputDir string `yaml:"output_dir"`
 }
 
 type LogConfig struct {

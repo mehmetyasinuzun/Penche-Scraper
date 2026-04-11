@@ -1,27 +1,21 @@
 # Penche Router — Konfigürasyon
 #
-# Bu dosyayı doğrudan düzenleyebilirsin.
-# Hassas bilgileri (token gibi) env variable olarak da geçebilirsin:
+# Env variable override'ları (hassas bilgiler için):
 #
 #   Windows CMD:
 #     set PENCHE_AUTH_SECRET=buraya-yaz
 #     set PENCHE_TAIGA_TOKEN=buraya-yaz
 #
-#   Windows PowerShell:
+#   PowerShell:
 #     $env:PENCHE_AUTH_SECRET="buraya-yaz"
 #     $env:PENCHE_TAIGA_TOKEN="buraya-yaz"
-#
-#   Linux / macOS / Git Bash:
-#     export PENCHE_AUTH_SECRET="buraya-yaz"
-#     export PENCHE_TAIGA_TOKEN="buraya-yaz"
 
 server:
   host: "127.0.0.1"
   port: 8787
 
 auth:
-  # Eklenti ile router arasında ortak şifre.
-  # İstediğin bir şey olabilir — ama boş bırakma.
+  # Eklenti ile router arasında ortak şifre. Herhangi bir şey olabilir.
   shared_secret: "CHANGE_ME"
 
 storage:
@@ -35,33 +29,32 @@ worker:
   concurrent_jobs: 3
 
 routes:
-  default: "taiga"
-  # Belirli domainleri farklı adaptöre yönlendirmek istersen:
-  # domain_map:
-  #   "exploit.in": "taiga"
-  #   "baska-forum.onion": "webhook"
+  # Hangi adapter varsayılan olarak kullanılsın.
+  # Seçenekler: "local", "taiga", "webhook"
+  default: "local"
 
 adapters:
-  taiga:
-    enabled: true
-    base_url: "https://tree.taiga.io"
-    # project_slug: Taiga URL'indeki proje adı.
-    # Örnek: tree.taiga.io/project/enesm-monitoring-team/kanban
-    #   → project_slug: "enesm-monitoring-team"
-    project_slug: ""
-    # auth_token: Taiga API token'ı.
-    # env variable ile vermek daha güvenli: PENCHE_TAIGA_TOKEN
-    auth_token: ""
 
+  # LOCAL: Capture'ları diske kaydeder + http://127.0.0.1:8787/ui adresinde görüntüler.
+  # Taiga veya webhook kurmadan hemen çalışmaya başlamak için bu yeterli.
+  local:
+    enabled: true
+    output_dir: "output"   # router klasörüne göre. Tam yol da verilebilir: "C:/Penche/output"
+
+  # TAIGA: Direkt Taiga Kanban'a kart açar.
+  # Token nasıl alınır: README'deki "Taiga Token Alma" bölümüne bak.
+  taiga:
+    enabled: false
+    base_url: "https://tree.taiga.io"
+    project_slug: ""    # URL'deki kısım: tree.taiga.io/project/BURASI/kanban
+    auth_token: ""      # ya da env: PENCHE_TAIGA_TOKEN
+
+  # WEBHOOK: Herhangi bir HTTP endpoint'e POST atar (Discord, Slack, n8n…)
   webhook:
     enabled: false
-    # Herhangi bir HTTP endpoint — Discord, Slack, n8n, özel sunucu...
     url: ""
     method: "POST"
     timeout_ms: 10000
-    # Ek header gerektiren servisler için:
-    # headers:
-    #   Authorization: "Bearer TOKEN"
 
 log:
   level: "info"

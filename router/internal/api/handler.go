@@ -21,6 +21,7 @@ type Store interface {
 	InsertEvent(ctx context.Context, evt *domain.IncomingEvent) (*domain.StoredEvent, error)
 	CreateDeliveryJob(ctx context.Context, eventID, destination string, maxAttempts int) (*domain.DeliveryJob, error)
 	CountEventsByStatus(ctx context.Context) (map[string]int64, error)
+	ListEvents(ctx context.Context, limit int) ([]*domain.StoredEvent, error)
 }
 
 // Handler holds all HTTP handler dependencies.
@@ -51,6 +52,13 @@ func (h *Handler) Mount(r chi.Router) {
 	r.Get("/v1/health", h.handleHealth)
 	r.Get("/v1/metrics", h.handleMetrics)
 	r.With(h.authMiddleware).Post("/v1/events", h.handlePostEvent)
+
+	// Gallery UI — human-readable view of all captures.
+	gallery := newGalleryHandler(h.store)
+	r.Get("/ui", gallery.ServeHTTP)
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/ui", http.StatusFound)
+	})
 }
 
 // handleHealth returns 200 OK with a JSON body.

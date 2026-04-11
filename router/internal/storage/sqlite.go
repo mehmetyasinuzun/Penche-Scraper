@@ -245,6 +245,42 @@ func (s *Store) MarkJobFailed(ctx context.Context, id int64, attemptNo int, errM
 	return tx.Commit()
 }
 
+// ListEvents returns the most recent events for the gallery view.
+func (s *Store) ListEvents(ctx context.Context, limit int) ([]*domain.StoredEvent, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, event_id, captured_at, domain, page_title, page_url,
+		       screenshot_mime, screenshot_data,
+		       meta_browser, meta_profile_id, meta_tags,
+		       status, created_at, updated_at
+		FROM events
+		ORDER BY captured_at DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []*domain.StoredEvent
+	for rows.Next() {
+		var e domain.StoredEvent
+		var capturedAt, createdAt, updatedAt, status string
+		if err := rows.Scan(
+			&e.ID, &e.EventID, &capturedAt, &e.Domain, &e.PageTitle, &e.PageURL,
+			&e.ScreenshotMIME, &e.ScreenshotData,
+			&e.MetaBrowser, &e.MetaProfileID, &e.MetaTags,
+			&status, &createdAt, &updatedAt,
+		); err != nil {
+			return nil, err
+		}
+		e.Status = domain.EventStatus(status)
+		e.CapturedAt, _ = time.Parse(time.RFC3339Nano, capturedAt)
+		e.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
+		e.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updatedAt)
+		events = append(events, &e)
+	}
+	return events, rows.Err()
+}
+
 // CountEventsByStatus returns per-status event counts for metrics.
 func (s *Store) CountEventsByStatus(ctx context.Context) (map[string]int64, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT status, COUNT(*) FROM events GROUP BY status`)

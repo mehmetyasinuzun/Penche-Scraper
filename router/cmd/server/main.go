@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/penche/router/internal/adapters"
+	localadapter "github.com/penche/router/internal/adapters/local"
 	taigaadapter "github.com/penche/router/internal/adapters/taiga"
 	webhookadapter "github.com/penche/router/internal/adapters/webhook"
 	"github.com/penche/router/internal/api"
@@ -119,8 +120,21 @@ func buildAdapters(cfg *config.Config, log *slog.Logger) map[string]adapters.Des
 		log.Info("adapter registered", "name", wa.Name())
 	}
 
+	if cfg.Adapters.Local.Enabled {
+		la := localadapter.New(cfg.Adapters.Local)
+		if err := la.ValidateConfig(); err != nil {
+			log.Error("local adapter config invalid", "error", err)
+			os.Exit(1)
+		}
+		m[la.Name()] = la
+		log.Info("adapter registered", "name", la.Name(), "output_dir", cfg.Adapters.Local.OutputDir)
+	}
+
 	if len(m) == 0 {
-		log.Warn("no adapters enabled — events will be accepted but not delivered")
+		// Default fallback: save to ./output so the tool works out of the box.
+		log.Warn("no adapters enabled — enabling local adapter with default output dir './output'")
+		la := localadapter.New(config.LocalConfig{Enabled: true, OutputDir: "output"})
+		m[la.Name()] = la
 	}
 
 	return m
