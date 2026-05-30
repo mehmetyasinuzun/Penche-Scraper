@@ -16,9 +16,12 @@ Tarayıcı
         │
         ├── SQLite  (events + delivery_jobs + job_attempts)
         │
+        ├── Gallery /ui  (statik HTML + JSON API → tarayıcıda render)
+        │
         └── Worker
-              ├── Taiga Adapter  →  Taiga REST API
-              └── Webhook Adapter → herhangi bir HTTP endpoint
+              ├── Local Adapter   →  diske JSON + ekran görüntüsü
+              ├── Taiga Adapter   →  Taiga REST API
+              └── Webhook Adapter →  herhangi bir HTTP endpoint
 ```
 
 Bu ayrımın pratik faydası şu: yarın Taiga yerine başka bir yere göndermek istersen eklentiyi güncelleme dağıtmana gerek yok. Router'daki config'i değiştirmek yeterli.
@@ -26,6 +29,8 @@ Bu ayrımın pratik faydası şu: yarın Taiga yerine başka bir yere göndermek
 ---
 
 ## Extension Tarafı
+
+Tüm giriş noktaları (background, content, popup, options) ilk satırda `webextension-polyfill`'i import eder. Firefox'ta `browser.*` zaten global; Chrome MV3'te yalnızca `chrome.*` vardır, polyfill `browser`'ı global'e bağlayarak tek kod tabanının her iki tarayıcıda çalışmasını sağlar. UUID üretimi `crypto.randomUUID()` ile yapılır (ek paket yok).
 
 ### background/index.ts
 Servis worker. `browser.commands.onCommand` ile kısayolu dinliyor. Capture tamamlanınca content script'e toast mesajı fırlatıyor, popup açıksa sonucu aktarıyor. 30 saniyede bir outbox'ı boşaltmaya çalışıyor.
@@ -74,6 +79,12 @@ Web Crypto API kullanarak HMAC-SHA256 imzası üretiyor. `HMAC(secret, timestamp
 ### shared/config.ts
 Domain profil resolution mantığı burada. Önce tam host eşleşmesi, sonra opsiyonel path regex kontrolü, en son wildcard subdomain (`*.domain.com`) deniyor.
 
+### shared/presets.ts
+Sık izlenen CTI forumları (XSS.is, Exploit.in, BreachForums, Nulled, Cracked.io, Leakbase, Hackforums) için hazır profil tanımları. Options'taki "Hazır Profiller" panelinde tek tıkla eklenir; seçiciler her forum motoruna (XenForo / MyBB / IPB) göre başlangıç değerleridir, picker ile düzeltilebilir.
+
+### options.ts — picker hedefleme
+Options kendi sekmesinde açıldığı için "aktif sekme" options sayfasının kendisidir. `findTargetTab()`, options sekmesi dışındaki en son etkin `http(s)` sekmesini bularak Seç/Test işlemlerini doğru forum sekmesine yönlendirir.
+
 ---
 
 ## Router Tarafı
@@ -82,12 +93,19 @@ Domain profil resolution mantığı burada. Önce tam host eşleşmesi, sonra op
 Bağımlılıkları wire ediyor: config → store → verifier → handler → worker. Graceful shutdown'da önce HTTP server'ı kapatıyor, worker'ın in-flight job'ları bitirmesini bekliyor.
 
 ### internal/api/handler.go
-Üç endpoint:
+Endpoint'ler:
 - `GET /v1/health` — her zaman 200, monitoring için
 - `GET /v1/metrics` — status bazında event sayıları
+- `GET /v1/stats` — panel için toplam + status + domain sayıları
+- `GET /v1/events` — filtrelenebilir/sayfalı capture listesi (ekran görüntüsü ikilisi olmadan)
+- `GET /v1/events/{id}/image` — tek capture'ın ekran görüntüsünü akıtır
+- `DELETE /v1/events/{id}` — capture + teslimat geçmişini cascade siler
 - `POST /v1/events` — body okur, HMAC doğrular, event persist eder, delivery job açar
 
-Duplicate event_id gelirse 200 döner, yeni job açmaz. Extension retry yaptığında çift kart açılmıyor.
+`POST` dışındaki tüm endpoint'ler auth'suz (localhost binding). Yalnızca mutating `POST /v1/events` HMAC ister. Duplicate event_id gelirse 200 döner, yeni job açmaz — extension retry yaptığında çift kart açılmaz.
+
+### internal/api/gallery.go
+`/ui`, `go:embed` ile gömülü tek bir statik `gallery.html` döndürür. Tüm veri tarayıcıda yukarıdaki JSON API'den çekilir; ekran görüntüleri `/v1/events/{id}/image` üzerinden tembel (lazy) yüklenir. Böylece ilk yanıt küçük kalır — yüzlerce capture'ı base64 olarak tek dev HTML'e gömmek yerine. Galeri: metrik paneli, domain/durum filtreleri, arama, lightbox, sil ve Markdown kopyalama içerir. Adversary-kontrollü içerik (başlık/URL) DOM API'leriyle (textContent) basılır — innerHTML string interpolasyonu yok, XSS yüzeyi kapalı.
 
 ### internal/auth/hmac.go
 Header'lardan timestamp ve signature alıp doğruluyor. Clock skew kontrolü var (±5 dakika). Body üzerinden signature yeniden hesaplanıp constant-time compare ile karşılaştırılıyor.

@@ -4,6 +4,9 @@ router/*.db
 router/*.db-shm
 router/*.db-wal
 
+# Local adapter capture output
+router/output/
+
 # Node / Extension build
 extension/node_modules/
 extension/dist/

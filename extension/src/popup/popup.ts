@@ -1,54 +1,79 @@
+import 'webextension-polyfill';
 import { loadConfig, resolveProfile } from '../shared/config';
 import { checkHealth } from '../background/router-client';
 import { ExtMessage, CaptureResultMessage } from '../shared/types';
 
 const $ = (id: string) => document.getElementById(id)!;
 
+let currentHost = '';
+let galleryBase = 'http://127.0.0.1:8787';
+
 async function init(): Promise<void> {
-  // Get active tab info.
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  const url = tab?.url ? new URL(tab.url) : null;
-  const host = url?.hostname ?? '—';
+  const url = tab?.url ? safeUrl(tab.url) : null;
+  currentHost = url?.hostname ?? '';
 
-  ($('domain-val') as HTMLElement).textContent = host;
+  ($('domain-val') as HTMLElement).textContent = currentHost || '—';
 
-  // Check profile match.
   const cfg = await loadConfig();
-  const match = url ? resolveProfile(cfg, url.hostname, url.pathname) : null;
+  galleryBase = cfg.global.router.baseUrl.replace(/\/+$/, '');
 
-  const profileEl = $('profile-val');
+  const match = url ? resolveProfile(cfg, url.hostname, url.pathname) : null;
+  const tag = $('profile-tag');
+  const addLink = $('add-profile-link');
   if (match) {
-    profileEl.textContent = match.profileId;
-    profileEl.className = 'value ok';
+    tag.textContent = match.profileId;
+    ($('profile-row') as HTMLElement).className = 'profile ok';
+    addLink.hidden = true;
   } else {
-    profileEl.textContent = 'No profile — click Options to create one';
-    profileEl.className = 'value warn';
+    tag.textContent = currentHost ? 'Profil yok' : '—';
+    ($('profile-row') as HTMLElement).className = 'profile warn';
+    addLink.hidden = !currentHost;
   }
 
-  // Outbox count.
-  const outboxResp = await browser.runtime.sendMessage({ type: 'OUTBOX_STATUS' });
-  ($('outbox-val') as HTMLElement).textContent = String(outboxResp?.pendingCount ?? 0);
+  browser.runtime.sendMessage({ type: 'OUTBOX_STATUS' })
+    .then((r: any) => { ($('outbox-val') as HTMLElement).textContent = String(r?.pendingCount ?? 0); })
+    .catch(() => {});
 
-  // Router health check.
-  const dot = $('router-dot');
-  const healthy = await checkHealth(cfg.global.router);
-  dot.className = `dot ${healthy ? 'online' : 'offline'}`;
-  dot.title = healthy ? 'Router online' : 'Router offline';
+  setRouterPill(await checkHealth(cfg.global.router));
 
-  // Load last capture from storage.
   const stored = await browser.storage.local.get('penche_last_capture');
   if (stored.penche_last_capture) {
     const last = stored.penche_last_capture as { ts: string; status: string };
-    ($('last-capture-val') as HTMLElement).textContent = `${last.status} · ${new Date(last.ts).toLocaleTimeString()}`;
+    ($('last-capture-val') as HTMLElement).textContent =
+      `${statusLabel(last.status)} · ${new Date(last.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
   }
+
+  showShortcut();
 }
 
-// Capture button.
+function setRouterPill(online: boolean): void {
+  const pill = $('router-pill');
+  pill.className = `pill ${online ? 'online' : 'offline'}`;
+  ($('router-text') as HTMLElement).textContent = online ? 'Çevrimiçi' : 'Çevrimdışı';
+}
+
+function statusLabel(s: string): string {
+  return s === 'sent' ? 'Gönderildi' : s === 'queued' ? 'Kuyrukta' : s;
+}
+
+function safeUrl(u: string): URL | null {
+  try { return new URL(u); } catch { return null; }
+}
+
+async function showShortcut(): Promise<void> {
+  try {
+    const cmds = await browser.commands.getAll();
+    const cap = cmds.find((c) => c.name === 'capture');
+    if (cap?.shortcut) ($('shortcut-hint') as HTMLElement).textContent = cap.shortcut;
+  } catch { /* commands.getAll unsupported — keep default */ }
+}
+
 $('capture-btn').addEventListener('click', async () => {
   const btn = $('capture-btn') as HTMLButtonElement;
   const statusMsg = $('status-msg');
   btn.disabled = true;
-  btn.textContent = 'Capturing…';
+  btn.textContent = 'Yakalanıyor…';
   statusMsg.textContent = '';
 
   try {
@@ -56,47 +81,61 @@ $('capture-btn').addEventListener('click', async () => {
     const r = resp as any;
 
     if (r?.status === 'success') {
-      statusMsg.textContent = `✓ Sent (${r.eventId?.slice(0, 8)}…)`;
-      statusMsg.style.color = '#22c55e';
+      setMsg(`✓ Gönderildi (${r.eventId?.slice(0, 8)}…)`, 'var(--green)');
       await browser.storage.local.set({ penche_last_capture: { ts: new Date().toISOString(), status: 'sent' } });
+      ($('last-capture-val') as HTMLElement).textContent =
+        `Gönderildi · ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
     } else if (r?.status === 'queued') {
-      statusMsg.textContent = '⚠ Router offline — queued for retry';
-      statusMsg.style.color = '#f59e0b';
+      setMsg('⚠ Router çevrimdışı — kuyruğa alındı', 'var(--amber)');
     } else if (r?.status === 'no_profile') {
-      statusMsg.textContent = `No profile for "${r.domain}"`;
-      statusMsg.style.color = '#ef4444';
+      setMsg(`Bu site için profil yok: "${r.domain}"`, 'var(--red)');
+      $('add-profile-link').hidden = false;
     } else {
-      statusMsg.textContent = `✗ ${r?.message ?? 'Unknown error'}`;
-      statusMsg.style.color = '#ef4444';
+      setMsg(`✗ ${r?.message ?? 'Bilinmeyen hata'}`, 'var(--red)');
     }
   } catch (err) {
-    statusMsg.textContent = `✗ ${err}`;
-    statusMsg.style.color = '#ef4444';
+    setMsg(`✗ ${err}`, 'var(--red)');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Capture Now';
+    btn.innerHTML = btn.dataset.label || 'Şimdi Yakala';
   }
 });
 
-// Options link.
+function setMsg(text: string, color: string): void {
+  const el = $('status-msg');
+  el.textContent = text;
+  el.style.color = color;
+}
+
+$('gallery-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  browser.tabs.create({ url: `${galleryBase}/ui` });
+  window.close();
+});
+
 $('options-link').addEventListener('click', (e) => {
   e.preventDefault();
   browser.runtime.openOptionsPage();
+  window.close();
 });
 
-// Listen for result pushed from background.
+$('add-profile-link').addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (currentHost) await browser.storage.local.set({ penche_add_domain: currentHost });
+  browser.runtime.openOptionsPage();
+  window.close();
+});
+
 browser.runtime.onMessage.addListener((msg: ExtMessage) => {
   if (msg.type === 'CAPTURE_RESULT') {
     const m = msg as CaptureResultMessage;
-    const statusMsg = $('status-msg');
-    if (m.success) {
-      statusMsg.textContent = `✓ Captured (${m.eventId?.slice(0, 8)}…)`;
-      statusMsg.style.color = '#22c55e';
-    } else {
-      statusMsg.textContent = `✗ ${m.error}`;
-      statusMsg.style.color = '#ef4444';
-    }
+    if (m.success) setMsg(`✓ Yakalandı (${m.eventId?.slice(0, 8)}…)`, 'var(--green)');
+    else setMsg(`✗ ${m.error}`, 'var(--red)');
   }
 });
+
+// Cache the button's original markup so we can restore it after capture.
+const capBtn = $('capture-btn') as HTMLButtonElement;
+capBtn.dataset.label = capBtn.innerHTML;
 
 init().catch(console.error);

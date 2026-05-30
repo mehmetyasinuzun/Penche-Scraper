@@ -50,6 +50,77 @@ Event'lerin durumuna göre sayım. Auth gerektirmiyor.
 
 ---
 
+## Galeri Veri API'si
+
+Galeri (`/ui`) bu üç endpoint'i kullanır. Hepsi auth gerektirmez — router yalnızca `127.0.0.1`'i dinlediği için yerel kullanıma açıktır.
+
+### GET /v1/stats
+
+Panel sayıları: toplam, durum bazında ve domain bazında.
+
+```json
+{
+  "total": 128,
+  "status": { "delivered": 120, "pending": 7, "dead_letter": 1 },
+  "domains": [
+    { "domain": "xss.is", "count": 64 },
+    { "domain": "exploit.in", "count": 40 }
+  ]
+}
+```
+
+### GET /v1/events
+
+Filtrelenebilir, sayfalı capture listesi. Ekran görüntüsü ikilisi **dönmez** (sadece `has_image` + MIME); liste hafif kalır.
+
+| Query | Açıklama |
+|---|---|
+| `limit` | Sayfa boyutu (varsayılan 60, maks 500) |
+| `offset` | Atlanacak kayıt sayısı |
+| `domain` | Tam domain eşleşmesi |
+| `status` | `delivered` \| `pending` \| `dead_letter` |
+| `q` | Başlık / URL / domain içinde arama |
+
+```json
+{
+  "total": 64,
+  "limit": 60,
+  "offset": 0,
+  "events": [
+    {
+      "event_id": "550e8400-…",
+      "captured_at": "2026-04-11T14:32:00Z",
+      "domain": "xss.is",
+      "page_title": "Thread başlığı",
+      "page_url": "https://xss.is/threads/12345/",
+      "tags": ["cti", "forum"],
+      "status": "delivered",
+      "has_image": true,
+      "image_mime": "image/jpeg"
+    }
+  ]
+}
+```
+
+Görüntü, `GET /v1/events/{event_id}/image` adresinden ayrı çekilir.
+
+### GET /v1/events/{event_id}/image
+
+Capture'ın ekran görüntüsü ikilisini doğru `Content-Type` ile akıtır. Görüntü yoksa `404`.
+
+### DELETE /v1/events/{event_id}
+
+Capture'ı ve (cascade ile) teslimat geçmişini kalıcı siler.
+
+**Response 200:**
+```json
+{ "status": "deleted", "event_id": "550e8400-…" }
+```
+
+`404` — kayıt bulunamadı.
+
+---
+
 ## POST /v1/events
 
 Extension'dan capture edilen sayfayı alır, kuyruğa ekler.

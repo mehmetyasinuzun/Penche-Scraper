@@ -5,6 +5,7 @@
  *   - Handle element picker activation from the options page.
  */
 
+import 'webextension-polyfill';
 import { ExtMessage, ToastMessage, PickElementStartMessage } from '../shared/types';
 import { startPicker, cancelPicker } from './picker';
 

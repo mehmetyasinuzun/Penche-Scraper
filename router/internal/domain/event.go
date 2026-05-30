@@ -64,18 +64,49 @@ type StoredEvent struct {
 	UpdatedAt      time.Time   `db:"updated_at"`
 }
 
+// EventSummary is a lightweight projection of an event for list views.
+// It deliberately omits the screenshot binary so listing many events stays cheap.
+type EventSummary struct {
+	EventID    string      `json:"event_id"`
+	CapturedAt time.Time   `json:"captured_at"`
+	Domain     string      `json:"domain"`
+	PageTitle  string      `json:"page_title"`
+	PageURL    string      `json:"page_url"`
+	Browser    string      `json:"browser,omitempty"`
+	ProfileID  string      `json:"profile_id,omitempty"`
+	Tags       []string    `json:"tags"`
+	Status     EventStatus `json:"status"`
+	HasImage   bool        `json:"has_image"`
+	ImageMIME  string      `json:"image_mime,omitempty"`
+}
+
+// EventFilter narrows and paginates an event query.
+type EventFilter struct {
+	Limit  int
+	Offset int
+	Domain string
+	Status string
+	Search string
+}
+
+// DomainCount is a per-domain capture tally for the gallery facets.
+type DomainCount struct {
+	Domain string `json:"domain"`
+	Count  int    `json:"count"`
+}
+
 // DeliveryJob is a unit of work dispatched to an adapter.
 type DeliveryJob struct {
-	ID          int64     `db:"id"`
-	EventID     string    `db:"event_id"`
-	Destination string    `db:"destination"`
-	Status      JobStatus `db:"status"`
-	AttemptCount int      `db:"attempt_count"`
-	MaxAttempts  int      `db:"max_attempts"`
-	NextRunAt   time.Time `db:"next_run_at"`
-	LastError   string    `db:"last_error"`
-	CreatedAt   time.Time `db:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at"`
+	ID           int64     `db:"id"`
+	EventID      string    `db:"event_id"`
+	Destination  string    `db:"destination"`
+	Status       JobStatus `db:"status"`
+	AttemptCount int       `db:"attempt_count"`
+	MaxAttempts  int       `db:"max_attempts"`
+	NextRunAt    time.Time `db:"next_run_at"`
+	LastError    string    `db:"last_error"`
+	CreatedAt    time.Time `db:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at"`
 }
 
 // JobAttempt records individual delivery attempts.

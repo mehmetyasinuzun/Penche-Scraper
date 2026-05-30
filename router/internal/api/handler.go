@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -21,7 +23,10 @@ type Store interface {
 	InsertEvent(ctx context.Context, evt *domain.IncomingEvent) (*domain.StoredEvent, error)
 	CreateDeliveryJob(ctx context.Context, eventID, destination string, maxAttempts int) (*domain.DeliveryJob, error)
 	CountEventsByStatus(ctx context.Context) (map[string]int64, error)
-	ListEvents(ctx context.Context, limit int) ([]*domain.StoredEvent, error)
+	QueryEvents(ctx context.Context, f domain.EventFilter) ([]*domain.EventSummary, int, error)
+	GetEventImage(ctx context.Context, eventID string) (string, []byte, error)
+	DeleteEvent(ctx context.Context, eventID string) (bool, error)
+	StatsByDomain(ctx context.Context) ([]domain.DomainCount, error)
 }
 
 // Handler holds all HTTP handler dependencies.
@@ -51,11 +56,14 @@ func (h *Handler) Mount(r chi.Router) {
 
 	r.Get("/v1/health", h.handleHealth)
 	r.Get("/v1/metrics", h.handleMetrics)
+	r.Get("/v1/stats", h.handleStats)
+	r.Get("/v1/events", h.handleListEvents)
+	r.Get("/v1/events/{id}/image", h.handleEventImage)
+	r.Delete("/v1/events/{id}", h.handleDeleteEvent)
 	r.With(h.authMiddleware).Post("/v1/events", h.handlePostEvent)
 
-	// Gallery UI — human-readable view of all captures.
-	gallery := newGalleryHandler(h.store)
-	r.Get("/ui", gallery.ServeHTTP)
+	// Gallery UI — a static shell that loads data from the JSON API above.
+	r.Get("/ui", serveGallery)
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/ui", http.StatusFound)
 	})
@@ -80,6 +88,94 @@ func (h *Handler) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"events": counts,
 	})
+}
+
+// handleStats returns dashboard figures: total, per-status counts, per-domain counts.
+func (h *Handler) handleStats(w http.ResponseWriter, r *http.Request) {
+	statusCounts, err := h.store.CountEventsByStatus(r.Context())
+	if err != nil {
+		h.log.Error("stats: status query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "stats unavailable")
+		return
+	}
+	domains, err := h.store.StatsByDomain(r.Context())
+	if err != nil {
+		h.log.Error("stats: domain query failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "stats unavailable")
+		return
+	}
+	var total int64
+	for _, c := range statusCounts {
+		total += c
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":   total,
+		"status":  statusCounts,
+		"domains": domains,
+	})
+}
+
+// handleListEvents returns a filtered, paginated page of event summaries.
+func (h *Handler) handleListEvents(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := domain.EventFilter{
+		Domain: q.Get("domain"),
+		Status: q.Get("status"),
+		Search: strings.TrimSpace(q.Get("q")),
+		Limit:  atoiDefault(q.Get("limit"), 60),
+		Offset: atoiDefault(q.Get("offset"), 0),
+	}
+	items, total, err := h.store.QueryEvents(r.Context(), f)
+	if err != nil {
+		h.log.Error("list events failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "could not list events")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":  total,
+		"limit":  f.Limit,
+		"offset": f.Offset,
+		"events": items,
+	})
+}
+
+// handleEventImage streams the screenshot bytes for a single event.
+func (h *Handler) handleEventImage(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	mime, data, err := h.store.GetEventImage(r.Context(), id)
+	if err != nil {
+		h.log.Error("get image failed", "error", err, "event_id", id)
+		writeError(w, http.StatusInternalServerError, "could not load image")
+		return
+	}
+	if len(data) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	if mime == "" {
+		mime = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	_, _ = w.Write(data)
+}
+
+// handleDeleteEvent removes a single capture and its delivery history.
+func (h *Handler) handleDeleteEvent(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	ok, err := h.store.DeleteEvent(r.Context(), id)
+	if err != nil {
+		h.log.Error("delete event failed", "error", err, "event_id", id)
+		writeError(w, http.StatusInternalServerError, "could not delete event")
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "event not found")
+		return
+	}
+	h.log.Info("event deleted", "event_id", id)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted", "event_id": id})
 }
 
 // handlePostEvent accepts a new event from the extension.
@@ -178,6 +274,16 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeError(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+func atoiDefault(s string, def int) int {
+	if s == "" {
+		return def
+	}
+	if n, err := strconv.Atoi(s); err == nil {
+		return n
+	}
+	return def
 }
 
 type bodyKey struct{}

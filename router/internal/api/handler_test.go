@@ -138,5 +138,94 @@ func TestPostEvent_NoAuth(t *testing.T) {
 	}
 }
 
+func TestEventsAPI_ListImageStatsDelete(t *testing.T) {
+	r := newTestRouter(t)
+
+	img := base64.StdEncoding.EncodeToString([]byte("\xff\xd8\xff fake jpeg bytes"))
+	payload := domain.IncomingEvent{
+		EventID:    "api-evt-1",
+		CapturedAt: time.Now().UTC(),
+		Domain:     "exploit.in",
+		PageTitle:  "RDP access EU",
+		PageURL:    "https://exploit.in/threads/9",
+		Screenshot: domain.ScreenshotPayload{MIME: "image/jpeg", Base64: img},
+		Meta:       domain.EventMeta{Tags: []string{"cti"}},
+	}
+	body, _ := json.Marshal(payload)
+	r.ServeHTTP(httptest.NewRecorder(), signedRequest(t, http.MethodPost, "/v1/events", body))
+
+	var lst struct {
+		Total  int `json:"total"`
+		Events []struct {
+			EventID  string `json:"event_id"`
+			HasImage bool   `json:"has_image"`
+		} `json:"events"`
+	}
+
+	// List is unauthenticated and returns summaries.
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/events?domain=exploit.in", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("list: expected 200, got %d", rr.Code)
+	}
+	json.Unmarshal(rr.Body.Bytes(), &lst)
+	if lst.Total != 1 || len(lst.Events) != 1 {
+		t.Fatalf("expected 1 event, got total=%d len=%d", lst.Total, len(lst.Events))
+	}
+	if !lst.Events[0].HasImage {
+		t.Error("expected has_image=true")
+	}
+
+	// Image bytes stream with the right content type.
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/events/api-evt-1/image", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("image: expected 200, got %d", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "image/jpeg" {
+		t.Errorf("image content-type: got %q", ct)
+	}
+
+	// Unknown image → 404.
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/events/nope/image", nil))
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("missing image: expected 404, got %d", rr.Code)
+	}
+
+	// Stats endpoint.
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/stats", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("stats: expected 200, got %d", rr.Code)
+	}
+
+	// Delete the capture.
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/v1/events/api-evt-1", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("delete: expected 200, got %d", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/v1/events", nil))
+	json.Unmarshal(rr.Body.Bytes(), &lst)
+	if lst.Total != 0 {
+		t.Errorf("expected 0 events after delete, got %d", lst.Total)
+	}
+}
+
+func TestGalleryUI(t *testing.T) {
+	r := newTestRouter(t)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ui", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("ui: expected 200, got %d", rr.Code)
+	}
+	if !bytes.Contains(rr.Body.Bytes(), []byte("Penche")) {
+		t.Error("gallery HTML should mention Penche")
+	}
+}
+
 // Dummy to satisfy unused import.
 var _ = context.Background

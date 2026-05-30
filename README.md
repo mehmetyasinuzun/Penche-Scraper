@@ -24,7 +24,7 @@ Forum sayfasındasın, tehdit içeren bir başlık görüyorsun. `Ctrl+Shift+X`.
 **Node.js** — eklentiyi derlemek için  
 → https://nodejs.org — "LTS" butonu, indir, kur.
 
-**Go** — router'ı çalıştırmak için  
+**Go (1.25+)** — router'ı çalıştırmak için  
 → https://go.dev/dl — Windows için `.msi` dosyasını indir, kur.
 
 Kurulumdan sonra yeni bir terminal aç ve kontrol et:
@@ -109,13 +109,17 @@ Bu terminal açık kaldığı sürece router çalışır.
 
 Her forum için bir kez yapılır.
 
-1. Takip edeceğin foruma git (örn. xss.is, exploit.in)
-2. Options → **Domain Profiles** → **Add**
-3. **Domain host:** `xss.is`
-4. **Pick** butonuna bas
+**Hızlı yol — Hazır Profiller:** Options → **Domain Profilleri** → **Hazır Profiller**. xss.is, exploit.in, BreachForums, Nulled, Cracked.io, Leakbase, Hackforums tek tıkla eklenir. Seçiciyi gerekirse **🎯 Seç** ile düzeltirsin.
+
+**Elle tanımlama:**
+
+1. Takip edeceğin foruma git (örn. xss.is, exploit.in) ve sekmeyi açık bırak
+2. Options → **Domain Profilleri** → **Boş Profil Ekle**
+3. **Domain Host:** `xss.is`
+4. **🎯 Seç** butonuna bas (açık forum sekmesini otomatik hedefler)
 5. Sayfada kırmızı bir kutu açılır — thread başlığına gel, tıkla
-6. Selector otomatik dolar
-7. **Save Profile**
+6. Seçici otomatik dolar
+7. **Profili Kaydet**
 
 ---
 
@@ -125,7 +129,17 @@ Profil tanımladığın bir forum sayfasındayken **`Ctrl+Shift+X`** bas.
 
 Sağ altta yeşil bildirim çıkar. Capture `router/output/` klasörüne kaydedilir.
 
-**Kaydedilenleri görmek için:** `http://127.0.0.1:8787/ui` — tarih ve domain bazında listelenir, her kartın altında **Kopyala** var.
+### Galeri — `http://127.0.0.1:8787/ui`
+
+Tüm yakalamaların tek yerden yönetildiği panel (eklenti popup'ındaki **Galeri** butonu da buraya açar):
+
+- **Metrik paneli** — toplam / teslim edildi / bekliyor / başarısız; karta tıklayınca o duruma filtreler.
+- **Domain filtreleri** — her domain için sayaçlı çipler.
+- **Arama** — başlık, URL veya domain içinde anlık ara (`/` tuşu arama kutusuna odaklar).
+- **Lightbox** — ekran görüntüsüne tıkla, tam boy aç; `←` `→` ile gez, `Esc` ile kapat.
+- **Kart aksiyonları** — Görüntüle · Kopyala (başlık+URL) · **MD** (Markdown) · Site'ye git · İndir · **Sil**.
+- **Canlı** modu — açıkken galeri kendini periyodik yeniler.
+- **Daha fazla yükle** — sayfalı; binlerce capture'da bile hızlı (görseller tembel yüklenir).
 
 ---
 

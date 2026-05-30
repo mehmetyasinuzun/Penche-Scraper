@@ -109,13 +109,13 @@ func (s *fakeStore) UpdateEventStatus(_ context.Context, eventID string, status 
 // ─── fake adapter ────────────────────────────────────────────────────────────
 
 type fakeAdapter struct {
-	mu       sync.Mutex
-	calls    int
-	failN    int // fail first N calls
-	sendErr  error
+	mu      sync.Mutex
+	calls   int
+	failN   int // fail first N calls
+	sendErr error
 }
 
-func (a *fakeAdapter) Name() string { return "fake" }
+func (a *fakeAdapter) Name() string          { return "fake" }
 func (a *fakeAdapter) ValidateConfig() error { return nil }
 
 func (a *fakeAdapter) Send(_ context.Context, _ *domain.StoredEvent) (adapters.DeliveryResult, error) {

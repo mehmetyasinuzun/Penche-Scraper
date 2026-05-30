@@ -6,6 +6,7 @@
  *   - Message routing from popup / options
  */
 
+import 'webextension-polyfill';
 import { loadConfig } from '../shared/config';
 import { logger } from '../shared/logger';
 import { runCapture } from './capture';

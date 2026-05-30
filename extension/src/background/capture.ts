@@ -4,7 +4,6 @@
  * takes a screenshot, and sends everything to the router.
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import { loadConfig, resolveProfile } from '../shared/config';
 import { RouterEventPayload, ScreenshotConfig } from '../shared/types';
 import { logger } from '../shared/logger';
@@ -59,7 +58,7 @@ export async function runCapture(tabId: number): Promise<CaptureOutcome> {
   }
 
   const payload: RouterEventPayload = {
-    event_id: uuidv4(),
+    event_id: crypto.randomUUID(),
     captured_at: new Date().toISOString(),
     domain: url.hostname,
     page_title: pageTitle,

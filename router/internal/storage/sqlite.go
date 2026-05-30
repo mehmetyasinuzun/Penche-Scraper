@@ -300,6 +300,126 @@ func (s *Store) CountEventsByStatus(ctx context.Context) (map[string]int64, erro
 	return result, rows.Err()
 }
 
+// QueryEvents returns a filtered, paginated page of event summaries plus the
+// total number of rows matching the filter (ignoring limit/offset).
+// The screenshot binary is never loaded here — only its presence and MIME.
+func (s *Store) QueryEvents(ctx context.Context, f domain.EventFilter) ([]*domain.EventSummary, int, error) {
+	var where []string
+	var args []any
+	if f.Domain != "" {
+		where = append(where, "domain = ?")
+		args = append(args, f.Domain)
+	}
+	if f.Status != "" {
+		where = append(where, "status = ?")
+		args = append(args, f.Status)
+	}
+	if f.Search != "" {
+		where = append(where, "(page_title LIKE ? OR page_url LIKE ? OR domain LIKE ?)")
+		like := "%" + f.Search + "%"
+		args = append(args, like, like, like)
+	}
+	clause := ""
+	if len(where) > 0 {
+		clause = "WHERE " + strings.Join(where, " AND ")
+	}
+
+	var total int
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM events "+clause, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	limit := f.Limit
+	if limit <= 0 || limit > 500 {
+		limit = 60
+	}
+	offset := f.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT event_id, captured_at, domain, page_title, page_url,
+		       meta_browser, meta_profile_id, meta_tags, status,
+		       screenshot_mime, LENGTH(screenshot_data)
+		FROM events `+clause+`
+		ORDER BY captured_at DESC
+		LIMIT ? OFFSET ?`, append(args, limit, offset)...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	items := make([]*domain.EventSummary, 0, limit)
+	for rows.Next() {
+		var e domain.EventSummary
+		var capturedAt, tagsJSON, status string
+		var imgLen int
+		if err := rows.Scan(
+			&e.EventID, &capturedAt, &e.Domain, &e.PageTitle, &e.PageURL,
+			&e.Browser, &e.ProfileID, &tagsJSON, &status,
+			&e.ImageMIME, &imgLen,
+		); err != nil {
+			return nil, 0, err
+		}
+		e.Status = domain.EventStatus(status)
+		e.CapturedAt, _ = time.Parse(time.RFC3339Nano, capturedAt)
+		e.HasImage = imgLen > 0
+		if err := json.Unmarshal([]byte(tagsJSON), &e.Tags); err != nil || e.Tags == nil {
+			e.Tags = []string{}
+		}
+		items = append(items, &e)
+	}
+	return items, total, rows.Err()
+}
+
+// GetEventImage returns the screenshot MIME and bytes for an event.
+// Returns ("", nil, nil) when the event does not exist.
+func (s *Store) GetEventImage(ctx context.Context, eventID string) (string, []byte, error) {
+	var mime string
+	var data []byte
+	err := s.db.QueryRowContext(ctx,
+		`SELECT screenshot_mime, screenshot_data FROM events WHERE event_id = ?`, eventID).
+		Scan(&mime, &data)
+	if err == sql.ErrNoRows {
+		return "", nil, nil
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	return mime, data, nil
+}
+
+// DeleteEvent removes an event and (via ON DELETE CASCADE) its delivery jobs and
+// attempts. Returns false when no matching event existed.
+func (s *Store) DeleteEvent(ctx context.Context, eventID string) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM events WHERE event_id = ?`, eventID)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// StatsByDomain returns capture counts grouped by domain, busiest first.
+func (s *Store) StatsByDomain(ctx context.Context) ([]domain.DomainCount, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT domain, COUNT(*) FROM events GROUP BY domain ORDER BY COUNT(*) DESC, domain ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.DomainCount, 0)
+	for rows.Next() {
+		var d domain.DomainCount
+		if err := rows.Scan(&d.Domain, &d.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 // --- scan helpers ---
 
 func scanEvent(row *sql.Row) (*domain.StoredEvent, error) {

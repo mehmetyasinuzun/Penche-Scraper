@@ -11,13 +11,13 @@ import (
 
 // Config is the root application configuration.
 type Config struct {
-	Server   ServerConfig       `yaml:"server"`
-	Auth     AuthConfig         `yaml:"auth"`
-	Storage  StorageConfig      `yaml:"storage"`
-	Worker   WorkerConfig       `yaml:"worker"`
-	Routes   RoutesConfig       `yaml:"routes"`
-	Adapters AdaptersConfig     `yaml:"adapters"`
-	Log      LogConfig          `yaml:"log"`
+	Server   ServerConfig   `yaml:"server"`
+	Auth     AuthConfig     `yaml:"auth"`
+	Storage  StorageConfig  `yaml:"storage"`
+	Worker   WorkerConfig   `yaml:"worker"`
+	Routes   RoutesConfig   `yaml:"routes"`
+	Adapters AdaptersConfig `yaml:"adapters"`
+	Log      LogConfig      `yaml:"log"`
 }
 
 type ServerConfig struct {
@@ -34,17 +34,17 @@ type StorageConfig struct {
 }
 
 type WorkerConfig struct {
-	PollIntervalMs  int `yaml:"poll_interval_ms"`
-	MaxRetries      int `yaml:"max_retries"`
-	BaseBackoffMs   int `yaml:"base_backoff_ms"`
-	MaxBackoffMs    int `yaml:"max_backoff_ms"`
-	ConcurrentJobs  int `yaml:"concurrent_jobs"`
+	PollIntervalMs int `yaml:"poll_interval_ms"`
+	MaxRetries     int `yaml:"max_retries"`
+	BaseBackoffMs  int `yaml:"base_backoff_ms"`
+	MaxBackoffMs   int `yaml:"max_backoff_ms"`
+	ConcurrentJobs int `yaml:"concurrent_jobs"`
 }
 
 // RoutesConfig maps domain patterns to destination names.
 type RoutesConfig struct {
-	Default     string            `yaml:"default"`
-	DomainMap   map[string]string `yaml:"domain_map"`
+	Default   string            `yaml:"default"`
+	DomainMap map[string]string `yaml:"domain_map"`
 }
 
 type AdaptersConfig struct {
